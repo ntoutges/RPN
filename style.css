@@ -1,0 +1,11 @@
+body {
+  background-color: cornsilk;
+  margin: 8px;
+}
+
+.levels {
+  width: 660px;
+  margin: auto;
+
+  background-color: #124d16;
+}

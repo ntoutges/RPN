@@ -1,0 +1,49 @@
+body {
+  background-color: rgb(44, 88, 44);
+  user-select: none;
+}
+
+.boxes {
+  width: 50px;
+  height: 50px;
+  display: inline-block;
+  background-color: #469946;
+}
+
+.boxes.active {
+  background-color: black;
+}
+
+.boxes:hover {
+  opacity: 0.4;
+}
+
+@font-face {
+  font-family: SourceCodePro;
+  src: url(./SourceCodePro-Regular.ttf);
+}
+
+#inlineOutput {
+  width: 258px;
+  display: block;
+
+  background-color: #3a3a3a;
+  color: #ffff2f;
+
+  font-family: SourceCodePro;
+  font-size: 21px;
+
+  margin-bottom: 5px;
+}
+
+#output {
+  resize: none;
+  width: 260px;
+  height: 300px;
+
+  background-color: #3a3a3a;
+  color: #ffff2f;
+
+  font-family: SourceCodePro;
+  font-size: 21px;
+}
