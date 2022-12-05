@@ -1,13 +1,16 @@
 const $ = window.$;
 
 import characters from "./graphics.js";
+import commands from "./commands.js";
+import types from "./dataTypes.js";
 
 const levelHeight = 40;
 var level1 = null;
 
 class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
   constructor(nextLevel) {
-    this.value = [];
+    this.value = []; // what is shown to the user
+    this.v = null;   // the actual data shown (set with solidify operation)
     this.next = nextLevel;
     this.isReal = false; // doesn't occupy screen space
 
@@ -41,29 +44,46 @@ class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
   }
   clear() { this.value = []; }
   getChars() { return this.value; }
-  stackUp(newValue=[]) {
+  stackUp(newValue=[], newV=null) {
     if (this.value.length != 0) {
       if (this.next == null) this.next = new ILevel(null); // expand stack if necessary
-      this.next.stackUp(this.value);
+      this.next.stackUp(this.value, this.v);
     }
     this.setChars(newValue);
+    this.v = newV;
   }
   stackDown() {
-    if (this.next == null) this.clear()
+    if (this.next == null) { this.clear(); }
     else {
       this.setChars(this.next.getChars());
+      this.v = this.next.v;
       this.next.stackDown();
       if (this.next.getChars().length == 0 && !this.next.isReal) this.next = null; // delete stack above this point, as it is empty
     }
+    return this.v;
   }
   clearHole() {
     this.stackDown();
     this.solidify();
   }
-  duplicate() { this.stackUp(this.value.concat()); } // concat to make a copy of this value
+  duplicate() {
+    this.stackUp(
+      this.value.concat(), // concat to make a copy of these characters
+      this.v.copy() // stringify/parse to make a copy of this value
+    );
+  }
 
   // these are mainly so the sub-class has a notification as to when the level state changse
-  solidify() { this.isSolid = true; }
+  solidify() {
+    this.v = new Value(this.value);
+    this.isSolid = true;
+
+    if (this.v.type == types.command) {
+      commands[this.v.val].call(this);
+    }
+
+    console.log(this.v)
+  }
   liquify() {
     this.stackUp(); // get rid of whatever is on the current level, so it doesn't interfere
     this.isSolid = false;
@@ -185,6 +205,37 @@ class Level extends ILevel {
     super.liquify();
     this.clearLine() // error: ":" showing through under pointer -- find why!
     this.render();
+  }
+}
+
+class BasicValue {
+  constructor(stringVal) {
+    this.val = null;
+    this.type = "";
+
+    const numericVal = parseInt(stringVal);
+    if (!isNaN(numericVal,10)) { // value is a number
+      this.val = numericVal;
+      this.type = types.number;
+    }
+    else if (stringVal in commands) {
+      this.val = stringVal; // assume value is a command
+      this.type = types.command;
+    }
+    else {
+      this.val = stringVal; // assume value is a string
+      this.type = types.string;
+    }
+  }
+
+  copy() { return new BasicValue(this.val); }
+
+  add(other) { return new BasicValue(this.val + other.val); }
+}
+
+class Value extends BasicValue {
+  constructor(value) { // input of characters
+    super(value.join(""));
   }
 }
 
