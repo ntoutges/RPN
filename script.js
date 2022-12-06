@@ -4,6 +4,7 @@ import characters from "./graphics.js";
 import commands from "./commands.js";
 import types from "./dataTypes.js";
 import pairs from "./pairs.js";
+import Value from "./value.js"
 
 const ALPHANUMERIC = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789."
 const ALGEBREIC = ALPHANUMERIC + "+-*/=()"
@@ -45,15 +46,15 @@ class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
     this.clear();
     this.value.chars = chars;
   }
-  addChar(char) {
+  addChar(char, index=this.value.chars.length) {
     if (this.isSolid) this.liquify(); // don't try to edit a solidified line
 
-    if (char in characters) this.value.chars.push(char);
-    else this.value.chars.push("unknown");
+    if (char in characters) this.value.chars.splice(index,0, char);
+    else this.value.chars.splice(index,0, "unknown");
   }
-  popChar() {
+  popChar(index=this.value.chars.length) {
     if (this.column == 0) return false; // unable to pop value
-    this.value.chars.pop();
+    this.value.chars.splice(index-1,1);
     return true; // able to pop value
   }
   clear() { this.value = new Value([]); }
@@ -89,6 +90,7 @@ class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
     catch (err) {
       console.log(err);
     }
+    if (lines.length == 0) { lines.push([]); } // ensure that the line will always be updated
     
     for (let i in lines) {
       try { this.value = new Value(lines[i]); }
@@ -186,6 +188,7 @@ class Level extends ILevel {
     this.column = 0;
     this.el = element;
     this.ctx = canvas.get(0).getContext("2d");
+    this.cursor = 100; // timeout for when cursor disappears
 
     const xScale = 5
     const yScale = element.height() / 10.1;
@@ -201,8 +204,7 @@ class Level extends ILevel {
     // different modes of rendering depending on input method
     if (this.isSolid) this.renderSolid();
     else              this.renderLiquid();
-
-    this.column = this.value.chars.length;
+    // this.column = this.value.chars.length;
     this.ctx.fill();
   }
 
@@ -210,7 +212,6 @@ class Level extends ILevel {
     let toRenderDepth = this.depth.toString().split("").concat(":");
     let toRender = this.value.chars;
     let spacing = 22 - toRender.length;
-
 
     if (toRender.length > 22 - toRenderDepth.length) {
       toRender = toRender.slice(0,20 - toRenderDepth.length).concat("...");
@@ -230,7 +231,8 @@ class Level extends ILevel {
   }
 
   renderLiquid() {
-    let toRender = this.value.chars.concat("<=");
+    let toRender = this.value.chars.concat(); // make copy of this.value
+    if (this.cursor > 0) toRender.splice(this.column, 1, "<="); // add in cursor
 
     let drawAll = false; // indicate whether or not to redraw line
     if (toRender.length >= 22) { // cut off what cannot be shown on the screen, and add ellipsis to the left to indicate the cut
@@ -239,7 +241,7 @@ class Level extends ILevel {
       drawAll = true;
     }
 
-    for (let i = drawAll ? 0 : this.column; i < toRender.length; i++) {
+    for (let i = drawAll ? 0 : 0; i < toRender.length; i++) {
       const char = characters[toRender[i]];
       this.renderAt(char, i*6);
     }
@@ -255,11 +257,27 @@ class Level extends ILevel {
       }
     }
   }
+  runCursor(step=10) {
+    this.cursor -= step;
+
+    let updateCursor = false;
+    if (this.cursor <= -100) {
+      this.cursor = 100;
+      updateCursor = true;
+    }
+    else if (this.cursor < 0 && this.cursor + step >= 0) updateCursor = true;
+
+    if (updateCursor) {
+      this.ctx.clearRect(this.column*6,0, 6,10.1);
+      this.render();
+    }
+  }
 
   clearLine() { this.ctx.clearRect(0,0, this.width, 10.1); } // clears whatever has been written to the screen
-
+  clearLineEnd(added=0) { this.ctx.clearRect(this.column*6,0, added+(this.value.chars.length-this.column)*6,10.1); } // clear after [this.column]
   clear() {
     this.column = 0;
+    this.editingAt = 0;
     this.clearLine()
     super.clear();
     this.render();
@@ -269,14 +287,17 @@ class Level extends ILevel {
     this.render();
   }
   addChar(char) {
-    super.addChar(char)
-    this.ctx.clearRect(this.column*6,0, 5,10.1);
+    super.addChar(char, this.column);
+    this.clearLineEnd()
+    this.column++;
+    this.cursor = 100;
     this.render();
   }
   popChar() {
-    if (!super.popChar()) return;
+    if (!super.popChar(this.column)) return;
     this.column--;
-    this.ctx.clearRect(this.column*6,0, 11,10.1); // erase this character, and the pointer
+    this.clearLineEnd(11) // erase this character, and the pointer
+    this.cursor = 100;
     this.render();
   }
   
@@ -301,138 +322,19 @@ class Level extends ILevel {
   liquify() {
     this.column = 0;
     super.liquify();
-    this.clearLine() // error: ":" showing through under pointer -- find why!
+    this.clearLine();
+    this.cursor = 100;
     this.render();
   }
-}
 
-class Value {
-  constructor(chars, val=null, type) { // input of characters, input of value
-    this.chars = chars;
-    this.value = null;
-    this.type = types.unset;
-    
-    if (val != null) {
-      this.value = val;
-      this.type = type;
-      return;
+  moveEdit(step) {
+    if (!this.isSolid) {
+      this.clearLine();
     }
-    
-    const stringVal = chars.join("");
-    const noIndicators = stringVal.substring(1, stringVal.length-1)
-    if (!isNaN(stringVal,10)) { // value is a number
-      this.value = parseFloat(stringVal);;
-      this.type = types.number;
-    }
-    else if (stringVal in commands) {
-      this.value = stringVal; // value is a command
-      this.type = types.command;
-    }
-    else if (stringVal[0] == "\"") { // if it starts with ", it must also end with "
-      this.value = stringVal.substring(1,stringVal.length-1); // remove quotes // value is a string
-      this.type = types.string;
-    }
-    else if (stringVal[0] == "\'") {// if it starts with ', it must also end with '
-      this.value = stringVal;
-      // (global/local) variable, or algebreic object
-      let isVariable = true;
-      let isAlgebra = false;
-      for (let char of noIndicators) {
-        if (isVariable && !ALPHANUMERIC.includes(char)) {
-          isVariable = false;
-          isAlgebra = true;
-        }
-        if (isAlgebra && !ALGEBREIC.includes(char)) { isAlgebra = false; }
-      }
-      if (isVariable) {
-        this.type = types.globalName; // default, for now
-      }
-      else if (isAlgebra) {
-        // second chance to be a number
-        if (isNaN(noIndicators)) { // remove 's from string to check if number
-          this.value = parseFloat(noIndicators);
-          this.type = types.number;
-        }
-        else this.type = types.algebreicObject;
-      }
-      else throw new Error(`Invalid value within expression ${stringVal}`)
-    }
-//     else if (stringVal[0] == "<") { // if it starts with <, it must also end with >
-      
-//     }
-    else {
-      this.value = stringVal;
-      this.type = types.unset;
-    }
-  }
-  
-  copy() {
-    return new Value(
-      this.chars,
-      this.value,
-      this.type
-    );
-  }
 
-  add(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
-
-    if (this.type == types.number && other.type == types.number) return this.addNumber(other);
-    if (this.type == types.string || other.type == types.string) return this.addString(other);
-  }
-  sub(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
-
-    if (this.type == types.number && other.type == types.number) return this.subNumber(other);
-  }
-  mul(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
-
-    if (this.type == types.number && other.type == types.number) return this.mulNumber(other);
-  }
-  div(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
-
-    if (this.type == types.number && other.type == types.number) return this.divNumber(other);
-  }
-  pow(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
-
-    if (this.type == types.number && other.type == types.number) return this.powNumber(other);
-  }
-  
-  equals(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
-
-    const val = ((this.type == other.type) && JSON.stringify(this.value) == JSON.stringify(other.value)) ? 1 : 0;
-    return new Value(
-      val.toString(),
-      val,
-      types.number
-    )
-  }
-  
-  operateNumber(newVal) {
-    return new Value(
-      newVal.toString(),
-      newVal,
-      types.number
-    );
-  }
-  addNumber(other) { return this.operateNumber(other.value + this.value); }
-  subNumber(other) { return this.operateNumber(other.value - this.value); }
-  mulNumber(other) { return this.operateNumber(other.value * this.value); }
-  divNumber(other) { return this.operateNumber(other.value / this.value); }
-  powNumber(other) { return this.operateNumber(other.value ** this.value); }
-  
-  addString(other) {
-    const newVal = other.value + this.value;
-    const newValChars = ["\""].concat(newVal.split("")).concat("\"");
-    return new Value(
-      newValChars,
-      newVal,
-      types.string
-    );
+    this.column = Math.min(Math.max(this.column+step, 0), this.value.chars.length); // constrain column to valid values
+    this.cursor = 100;
+    this.render();
   }
 }
 
@@ -460,7 +362,6 @@ function generateLevels(count) {
 // handle key presses
 $("body").keypress((event) => {
   if (event.key == "Enter" && event.shiftKey) return level1.handleInput("\n");
-
   level1.handleInput(event.key);
 });
 
@@ -471,4 +372,13 @@ $("body").keydown((event) => {
       level1.handleInput(char);
     } 
   });
+
+  if (event.keyCode == 37) { level1.moveEdit(-1); }
+  else if (event.keyCode == 39) { level1.moveEdit(1); }
 });
+
+setInterval(() => {
+  level1.runCursor();
+}, 100)
+
+// note to self: try to use ctrl/alt as modifier keys
