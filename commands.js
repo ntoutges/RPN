@@ -1,4 +1,4 @@
-import Value from "./value.js";
+import { Value } from "./value.js";
 import types from "./dataTypes.js";
 
 export default {

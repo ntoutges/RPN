@@ -4,10 +4,7 @@ import characters from "./graphics.js";
 import commands from "./commands.js";
 import types from "./dataTypes.js";
 import pairs from "./pairs.js";
-import Value from "./value.js"
-
-const ALPHANUMERIC = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789."
-const ALGEBREIC = ALPHANUMERIC + "+-*/=()"
+import { buildVal, Value } from "./value.js"
 
 const levelHeight = 40;
 var level1 = null;
@@ -33,7 +30,7 @@ class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
 
   handleInput(char) {
     if (char == "Enter") return this.enter();
-    else if (!this.isWithinPairs() && (char in commands)) {
+    else if (!this.isWithinPairs(this.column) && (char in commands)) {
       try { this.execute(char); }
       catch(err) {
         console.log(err);
@@ -80,7 +77,7 @@ class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
     this.stackDown();
     this.solidify();
   }
-  duplicate() { this.stackUp( this.value.copy() ); }
+  duplicate() { this.stackUp( this.value ); } // works because values are immutable
 
   // these are mainly so the sub-class has a notification as to when the level state changse
   solidify() {
@@ -93,7 +90,7 @@ class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
     if (lines.length == 0) { lines.push([]); } // ensure that the line will always be updated
     
     for (let i in lines) {
-      try { this.value = new Value(lines[i]); }
+      try { this.value = buildVal(lines[i]); }
       catch (err) {
         console.log(err);
         break;
@@ -120,58 +117,36 @@ class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
   }
 
   isWithinPairs(index=this.value.chars.length) {
-    let pairEnds = [];
-    for (let i = 0; i < index; i++) {
+    let pairEnding = null;
+    for (let i = 0; i < index; i++) { // encountered line start
       const char = this.value.chars[i];
-      if (char in pairs.end) {
-        const ender = pairEnds[pairEnds.length-1];
-        if (ender && char == ender) {
-          pairEnds.pop();
-          continue;
-        }
-      }
-      if (char in pairs.start) {
-          pairEnds.push(pairs.start[char]);
-      }
-      else if ((char == " " || char == "," || char == "\n") && pairEnds.length == "") { // new line required
-        pairEnds = []; // reset
-      }
+      if (pairEnding == null && char in pairs.start) pairEnding = pairs.start[char]; // detect character opening up pair
+      else if (char == pairEnding) pairEnding = null; // detect character closing pair
     }
-
-    return pairEnds.length != 0; // no extra pairEnds means that all is closed, and the cursor is not within any pairs
+    return pairEnding != null;
   }
 
   separateLines() {
     // if input should be put on multiple levels of the stack, separate
     const lines = [];
     let line = [];
-    let pairEnds = []; // stores the characters that, when within the pair, will eliminate the need to care about seperators
-    let isConstant = false;
+    let pairEnding = null; // stores the character that will close this pair
     for (let char of this.value.chars) {
-      // let isEnding = false;
-      if (char in pairs.end) {
-        const ender = pairEnds[pairEnds.length-1];
-        if (ender && char == ender) {
-          if (char == "\"") isConstant = false;
-          pairEnds.pop();
-          line.push(char);
-          continue;
-        }
-        else if (char == ender && !isConstant) throw new Error("Unmatched " + pairs.end[ender]);
+      if (pairEnding == null && (char == " " || char == "," || char == "\n")) { // skip adding any seperator characters to line
+        if (line.length != 0) lines.push(line);
+        line = [];
+        continue;
       }
-      if (char in pairs.start) {
-        const ender = pairEnds[pairEnds.length-1];
-        if (char == "\"") isConstant = true;
-        pairEnds.push(pairs.start[char]);
-        line.push(char);
-      }
-      else if ((char == " " || char == "," || char == "\n") && pairEnds.length == "") { // new line required
-        if (line.length != 0) lines.push(line); // don't add empty line
+      line.push(char);
+      
+      if (pairEnding == null && char in pairs.start) pairEnding = pairs.start[char];
+      else if (char == pairEnding) {
+        pairEnding = null;
+        lines.push(line);
         line = [];
       }
-      else line.push(char);
     }
-    if (pairEnds.length != 0) throw new Error("Unmatched " + pairs.end[pairEnds[pairEnds.length-1]]);
+    if (pairEnding != null) line.push(pairEnding);
     if (line.length != 0) lines.push(line);
     return lines;
   }
@@ -188,7 +163,7 @@ class Level extends ILevel {
     this.column = 0;
     this.el = element;
     this.ctx = canvas.get(0).getContext("2d");
-    this.cursor = 100; // timeout for when cursor disappears
+    this.cursor = 50; // timeout for when cursor disappears
 
     const xScale = 5
     const yScale = element.height() / 10.1;
@@ -213,7 +188,7 @@ class Level extends ILevel {
     let toRender = this.value.chars;
     let spacing = 22 - toRender.length;
 
-    if (toRender.length > 22 - toRenderDepth.length) {
+    if (toRender.length > 21 - toRenderDepth.length) {
       toRender = toRender.slice(0,20 - toRenderDepth.length).concat("...");
       spacing = toRenderDepth.length + 1;
     }
@@ -261,8 +236,8 @@ class Level extends ILevel {
     this.cursor -= step;
 
     let updateCursor = false;
-    if (this.cursor <= -100) {
-      this.cursor = 100;
+    if (this.cursor <= -50) {
+      this.cursor = 50;
       updateCursor = true;
     }
     else if (this.cursor < 0 && this.cursor + step >= 0) updateCursor = true;
@@ -290,14 +265,14 @@ class Level extends ILevel {
     super.addChar(char, this.column);
     this.clearLineEnd()
     this.column++;
-    this.cursor = 100;
+    this.cursor = 50;
     this.render();
   }
   popChar() {
     if (!super.popChar(this.column)) return;
     this.column--;
     this.clearLineEnd(11) // erase this character, and the pointer
-    this.cursor = 100;
+    this.cursor = 50;
     this.render();
   }
   
@@ -323,7 +298,7 @@ class Level extends ILevel {
     this.column = 0;
     super.liquify();
     this.clearLine();
-    this.cursor = 100;
+    this.cursor = 50;
     this.render();
   }
 
@@ -333,7 +308,7 @@ class Level extends ILevel {
     }
 
     this.column = Math.min(Math.max(this.column+step, 0), this.value.chars.length); // constrain column to valid values
-    this.cursor = 100;
+    this.cursor = 50;
     this.render();
   }
 }
@@ -373,12 +348,12 @@ $("body").keydown((event) => {
     } 
   });
 
-  if (event.keyCode == 37) { level1.moveEdit(-1); }
-  else if (event.keyCode == 39) { level1.moveEdit(1); }
+  if (event.keyCode == 37) { level1.moveEdit(event.ctrlKey ? -Infinity : -1); }
+  else if (event.keyCode == 39) { level1.moveEdit(event.ctrlKey ? Infinity : 1); }
 });
 
 setInterval(() => {
-  level1.runCursor();
+  level1.runCursor(9);
 }, 100)
 
 // note to self: try to use ctrl/alt as modifier keys

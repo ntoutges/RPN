@@ -1,136 +1,128 @@
 import types from "./dataTypes.js";
 import commands from "./commands.js";
 
-export default class Value {
-  constructor(chars, val=null, type) { // input of characters, input of value
-    this.chars = chars;
-    this.value = null;
-    this.type = types.unset;
-    
-    if (val != null) {
-      this.value = val;
-      this.type = type;
-      return;
-    }
-    if (chars.length == 0) return; // don't try to set an unsettable value
+const VARIABLE = /\d|[^a-z0-9+\-*=()/]/; // not (a-z, 0-9)
+const ALGEBREIC = /[^a-z0-9+\-*=()/]/ // not (a-z, 0-9, operators, parentheses)
 
-    const stringVal = chars.join("");
-    const noIndicators = stringVal.substring(1, stringVal.length-1)
-    if (!isNaN(stringVal,10)) { // value is a number
-      this.value = parseFloat(stringVal);
-      this.type = types.number;
-      this.chars = parseFloat(stringVal).toString().replace("e", "E").replace("+", ""); // convert [N]e+[M] to [N]E[M]
+export function buildVal(chars) {
+  const stringVal = chars.join("");
+
+  if (!isNaN(parseFloat(stringVal))) return new NumberValue(parseFloat(stringVal)); // value is a number
+  // else if (stringVal in commands) return new CommandValue(stringVal); // value is a command
+  else if (stringVal[0] == "\"") return new StringValue(stringVal) // value is a string
+  else if (stringVal[0] == "\'") { // (global/local) variable, or algebreic object
+    const value = stringVal.substring(1,stringVal.length-1); // remove 's
+    if (!VARIABLE.test(value)) { // alphanumeric
+      return new GlobalVariableValue(stringVal); // TODO: also need to test for local variable, eventually
     }
-    else if (stringVal in commands) {
-      this.value = stringVal; // value is a command
-      this.type = types.command;
-    }
-    else if (stringVal[0] == "\"") { // if it starts with ", it must also end with "
-      this.value = stringVal.substring(1,stringVal.length-1); // remove quotes // value is a string
-      this.type = types.string;
-    }
-    else if (stringVal[0] == "\'") {// if it starts with ', it must also end with '
-      this.value = stringVal;
-      // (global/local) variable, or algebreic object
-      let isVariable = true;
-      let isAlgebra = false;
-      for (let char of noIndicators) {
-        if (isVariable && !ALPHANUMERIC.includes(char)) {
-          isVariable = false;
-          isAlgebra = true;
-        }
-        if (isAlgebra && !ALGEBREIC.includes(char)) { isAlgebra = false; }
-      }
-      if (isVariable) {
-        this.type = types.globalName; // default, for now
-      }
-      else if (isAlgebra) {
-        // second chance to be a number
-        if (isNaN(noIndicators)) { // remove 's from string to check if number
-          this.value = parseFloat(noIndicators);
-          this.type = types.number;
-        }
-        else this.type = types.algebreicObject;
-      }
-      else throw new Error(`Invalid value within expression ${stringVal}`)
-    }
-//     else if (stringVal[0] == "<") { // if it starts with <, it must also end with >
-      
-//     }
-    else {
-      this.value = `'${stringVal}'`; // default
-      this.chars = ["\'"].concat(chars).concat("\'"); // add single quotes
-      console.log(this.chars)
-      this.type = types.globalName;
-    }
+    if (!ALGEBREIC.test(value)) {
+      if (!isNaN(parseFloat(value))) return new NumberValue(parseFloat(value)); // if it is just a number within 's, just create a number
+      else return new AlgebreicVariable(stringVal);
+    } // algebreic
+    throw new Error(`Invalid value within expression ${stringVal}`)
   }
-  
-  copy() {
-    return new Value(
-      this.chars,
-      this.value,
-      this.type
-    );
+  return new Value(chars);
+}
+
+// note to self: Values should be immutable
+export class Value {
+  constructor(chars=[], val=null, type=99) {
+    this.chars = chars;
+    this.value = val;
+    this.type = type;
+  }
+
+  // none of these commands should be triggered, so they will all cause an error
+  add() { throw new Error("Invalid arguments"); }
+  sub() { throw new Error("Invalid arguments"); }
+  mul() { throw new Error("Invalid arguments"); }
+  div() { throw new Error("Invalid arguments"); }
+  pow() { throw new Error("Invalid arguments"); }
+}
+
+// TODO: Make discrete classes for each data type to clean up mega class of Value
+export class NumberValue extends Value {
+  constructor(value) { // expects a number
+    if (!isFinite(value)) { // convert infinity to real number
+      if (value > 0) value = Number.MAX_VALUE;
+      else value = Number.MIN_VALUE;
+    }
+
+    let number = value.toString();
+    if (Math.abs(value) >= 1e18) {
+      const exponent = Math.floor(Math.log10(value));
+      const exponentStr = exponent.toString();
+      const mantissa = (number / (10**exponent)).toString().substring(0, 18-exponentStr.length);
+      number = mantissa + "E" + exponentStr;
+    }
+    else if (Math.abs(value) < 1) number = number.substring(1); // remove leading 0
+    
+    const chars = number.split("");
+    super(chars, value, types.number);
   }
 
   add(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
-
-    if (this.type == types.number && other.type == types.number) return this.addNumber(other);
-    if (this.type == types.string || other.type == types.string) return this.addString(other);
+    if (other.type == types.number) return new NumberValue(other.value + this.value);
+    if (other.type == types.string) return other.add(this);
+    super.add();
   }
   sub(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
-
-    if (this.type == types.number && other.type == types.number) return this.subNumber(other);
+    if (other.type == types.number) return new NumberValue(other.value - this.value);
+    super.sub();
   }
   mul(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
-
-    if (this.type == types.number && other.type == types.number) return this.mulNumber(other);
+    if (other.type == types.number) return new NumberValue(other.value * this.value);
+    if (other.type == types.string) return other.mul(this);
+    super.mul();
   }
   div(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
-
-    if (this.type == types.number && other.type == types.number) return this.divNumber(other);
+    if (other.type == types.number) return new NumberValue(other.value / this.value);
+    super.div();
   }
   pow(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
+    if (other.type == types.number) return new NumberValue(other.value ** this.value);
+    super.pow();
+  }
+}
 
-    if (this.type == types.number && other.type == types.number) return this.powNumber(other);
-  }
-  
-  equals(other) {
-    if (this.type == 99 || other.type == 99) throw new Error("Not enough arguments");
+export class StringValue extends Value {
+  constructor(stringVal) {
+    if (stringVal[0] != "\"") stringVal = "\"" + stringVal + "\""; // add in quotes that may be missing from [stringVal]
 
-    const val = ((this.type == other.type) && JSON.stringify(this.value) == JSON.stringify(other.value)) ? 1 : 0;
-    return new Value(
-      val.toString(),
-      val,
-      types.number
-    )
+    const value = stringVal.substring(1, stringVal.length-1); // remove quotes for value
+    const chars = stringVal.split("");
+    super(chars, value, types.string);
   }
-  
-  operateNumber(newVal) {
-    return new Value(
-      newVal.toString(),
-      newVal,
-      types.number
-    );
+
+  add(other) {
+    if (other.type == types.string) return new StringValue(other.value + this.value);
+    if (other.type == types.number) return new StringValue(other.chars.join("") + this.value);
+    super.add();
   }
-  addNumber(other) { return this.operateNumber(other.value + this.value); }
-  subNumber(other) { return this.operateNumber(other.value - this.value); }
-  mulNumber(other) { return this.operateNumber(other.value * this.value); }
-  divNumber(other) { return this.operateNumber(other.value / this.value); }
-  powNumber(other) { return this.operateNumber(other.value ** this.value); }
-  
-  addString(other) {
-    const newVal = other.value + this.value;
-    const newValChars = ["\""].concat(newVal.split("")).concat("\"");
-    return new Value(
-      newValChars,
-      newVal,
-      types.string
-    );
+  mul(other) { // acts like python string multiplication (which I like)
+    if (other.type == types.number) {
+      let newValue = "";
+      for (let i = 0; i < other.value; i++) newValue += this.value;
+      return new StringValue(newValue);
+    }
+    super.mul();
+  }
+}
+
+export class GlobalVariableValue extends Value {
+  constructor(stringVal) { // 's expected
+    const value = stringVal.substring(1, stringVal.length-1);
+    const chars = stringVal.split("");
+    super(chars, value, types.globalName);
+  }
+}
+
+export class AlgebreicVariable extends Value {
+  constructor(stringVal) {
+    if (stringVal[0] != "\'") stringVal = "\'" + stringVal + "\'"; // add in 's that may be missing from [stringVal]
+
+    const value = stringVal.substring(1, stringVal.length-1);
+    const chars = stringVal.split("");
+    super(chars, value, types.algebreic);
   }
 }
