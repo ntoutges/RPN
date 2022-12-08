@@ -161,6 +161,8 @@ class Level extends ILevel {
     
     this.isReal = true; // occupies screen space
     this.column = 0;
+    this.column2 = -2; // indicates the left cursor
+    this.windowLeft = 0;
     this.el = element;
     this.ctx = canvas.get(0).getContext("2d");
     this.cursor = 50; // timeout for when cursor disappears
@@ -207,30 +209,64 @@ class Level extends ILevel {
 
   renderLiquid() {
     let toRender = this.value.chars.concat(); // make copy of this.value
-    if (this.cursor > 0) toRender.splice(this.column, 1, "<="); // add in cursor
+    let invertLeft = Math.min(this.column2,this.column);
+    let invertRight = Math.max(this.column2,this.column);
+
+    if (this.windowLeft == -1 && this.column2 == -2) this.windowLeft = 0;
+
+    let windowLeft = Math.max(this.windowLeft,0);
+    let windowRight = this.windowLeft+21;
+    
+    if (this.cursor > 0) {
+      if (this.column2 != -2) {
+        // add in highlight cursors
+        toRender.splice(invertRight, 1, "<=");
+        if (invertLeft == -1) toRender.splice(0, 0, "=>");
+        else toRender.splice(invertLeft, 1, "=>");
+      }
+      else toRender.splice(this.column, 1, "<="); // add in cursor
+    }
+    else if (invertLeft == -1) toRender.splice(0,0, " "); // for spacing reasons
 
     let drawAll = false; // indicate whether or not to redraw line
-    if (toRender.length >= 22) { // cut off what cannot be shown on the screen, and add ellipsis to the left to indicate the cut
+    if (this.value.chars.length+1 >= 22) { // cut off what cannot be shown on the screen, and add ellipsis to the left to indicate the cut
       this.clearLine(); // all numbers will be shifted, so line must be cleared before it can be redrawn
-      if (toRender.length > 22) toRender = ["..."].concat(toRender.slice(-21)); // only want ellipsis if all cannot be drawn
+      if (this.value.chars.length+1 > 22) { // only want ellipsis if all cannot be drawn
+        const leftOverflow = this.windowLeft > 0 && !(invertLeft == this.windowLeft || invertRight == this.windowLeft);
+        const rightOverflow = windowRight+1 < this.value.chars.length && !(invertLeft == windowRight || invertRight == windowRight); 
+
+        if (leftOverflow && rightOverflow) toRender = ["..."].concat(toRender.slice(windowLeft+1, windowRight), "...");
+        else if (rightOverflow) toRender = toRender.slice(windowLeft,windowRight).concat("...");
+        else if (leftOverflow) toRender = ["..."].concat(toRender.slice(windowLeft+1, windowRight+2));
+        else toRender = toRender.slice(windowLeft,windowRight+1);
+      }
       drawAll = true;
     }
-
+    
+    if (invertLeft != -2) this.ctx.rect((invertLeft-this.windowLeft)*6+5,0, 1,10); // fill left slice of character
     for (let i = drawAll ? 0 : 0; i < toRender.length; i++) {
       const char = characters[toRender[i]];
-      this.renderAt(char, i*6);
+      this.renderAt(char, i*6, (invertLeft != -2 && i > invertLeft-this.windowLeft && i < invertRight-this.windowLeft));
     }
   }
 
-  renderAt(char, baseX) {
+  renderAt(char, baseX, invert) {
     for (let x = 0; x < 5; x++) { // characters are 5px wide
       const offX = baseX+x;
       for (let y = 0; y < char.length; y++) { // characters are (9/10)px tall
-        if (char[y][x] != " ") {
+        if (char[y][x] != " " ^ invert) {
           this.ctx.rect(offX, y, 1,1);
         }
       }
     }
+    if (invert) {
+      this.ctx.rect(baseX+5,0, 1,10); // fill gap with inversion
+      if (char.length != 10) { // not a character that goes to the bottom
+        this.ctx.rect(baseX,9,6,1); // fill bottom part of character
+      }
+    }
+    // this.ctx.fillStyle = "#2222" + Math.floor(16 + Math.random() * 239).toString(16)
+    // this.ctx.fill();
   }
   runCursor(step=10) {
     this.cursor -= step;
@@ -243,7 +279,8 @@ class Level extends ILevel {
     else if (this.cursor < 0 && this.cursor + step >= 0) updateCursor = true;
 
     if (updateCursor) {
-      this.ctx.clearRect(this.column*6,0, 6,10.1);
+      // this.ctx.clearRect(this.column*6,0, 6,10.1);
+      this.clearLine();
       this.render();
     }
   }
@@ -252,6 +289,7 @@ class Level extends ILevel {
   clearLineEnd(added=0) { this.ctx.clearRect(this.column*6,0, added+(this.value.chars.length-this.column)*6,10.1); } // clear after [this.column]
   clear() {
     this.column = 0;
+    this.windowLeft = 0;
     this.editingAt = 0;
     this.clearLine()
     super.clear();
@@ -262,18 +300,38 @@ class Level extends ILevel {
     this.render();
   }
   addChar(char) {
+    this.removeHighlighted();
     super.addChar(char, this.column);
-    this.clearLineEnd()
+    // this.clearLineEnd(11); // TODO: figure out why this doesn't work
+    this.clearLine();
     this.column++;
+    this.windowLeft = Math.max(this.column-21, this.windowLeft); // only move [windowLeft] if [column] goes past the right window bound
     this.cursor = 50;
     this.render();
   }
   popChar() {
+    if (this.removeHighlighted()) return; // don't pop another character after removing highlighed characters
     if (!super.popChar(this.column)) return;
     this.column--;
+
+    if (this.column-20 == this.windowLeft) this.windowLeft = Math.max(0, this.column-21); // cursor is at far right, so keep it there
+    else this.windowLeft = Math.min(this.column, this.windowLeft); // cursor is not at right, so move window normally
     this.clearLineEnd(11) // erase this character, and the pointer
     this.cursor = 50;
     this.render();
+  }
+  removeHighlighted() {
+    if (this.column2 == -2) return false; // none highlighed
+    const leftBound = Math.min(this.column2, this.column)+1;
+    const rightBound = Math.max(this.column2, this.column);
+
+    const deleteCount = rightBound - leftBound;
+    this.value.chars.splice(leftBound, deleteCount); // remove highlighed characters
+    
+    if (this.column2 > this.column) this.column2 -= deleteCount;
+
+    this.moveEdit(0); // remove highlight
+    return true;
   }
   
   stackUp(newValue=new Value([])) {
@@ -303,12 +361,44 @@ class Level extends ILevel {
   }
 
   moveEdit(step) {
-    if (!this.isSolid) {
-      this.clearLine();
-    }
+    if (!this.isSolid) { this.clearLine(); }
 
-    this.column = Math.min(Math.max(this.column+step, 0), this.value.chars.length); // constrain column to valid values
+    // standard operation
+    if (this.column2 == -2) this.column = Math.min(Math.max(this.column+step, 0), this.value.chars.length); // constrain column to valid values
+    // exiting highlight state, and move to column2 if [step] is in that direction
+
+    else if (this.column2 < this.column && step < 0) this.column = this.column2 + 1;
+    else if (this.column2 > this.column) {
+      if (step > 0) this.column = this.column2;
+      else this.column += 1;
+    }
+    else this.column = Math.max(this.column, 0); // ensure this value not less than 0
+    this.windowLeft = Math.min(Math.max(this.windowLeft, this.column-21), this.column); // only move [windowLeft] if [column] goes past the left/right bounds
+    this.column2 = -2;
     this.cursor = 50;
+    this.render();
+  }
+
+  moveHighlight(step) {
+    if (!this.isSolid) { this.clearLine(); }
+    
+    if (this.column2 == -2) {
+      if (step < 0) this.column2 = this.column - 1;
+      if (step > 0) {
+        this.column--;
+        this.column2 = this.column + 1;
+      }
+    }
+    
+    this.cursor = 50;
+    this.column2 = Math.min(Math.max(this.column2+step, -1), this.value.chars.length); // constrain column2 to valid values
+    this.windowLeft = Math.min(Math.max(this.windowLeft, this.column2-21), this.column2); // only move [windowLeft] if [column2] goes past the left/right bounds
+
+    // if (this.windowLeft < 0 && this.column2 >= 0) this.windowLeft = this.column2; // bring [windowLeft] out of negative
+    
+    // no need to render [column2]
+    if (this.column2 == this.column) this.column2 = -2;
+
     this.render();
   }
 }
@@ -348,8 +438,14 @@ $("body").keydown((event) => {
     } 
   });
 
-  if (event.keyCode == 37) { level1.moveEdit(event.ctrlKey ? -Infinity : -1); }
-  else if (event.keyCode == 39) { level1.moveEdit(event.ctrlKey ? Infinity : 1); }
+  if (event.keyCode == 37) {
+    if (event.shiftKey) level1.moveHighlight(event.ctrlKey ? Infinity : -1)
+    else level1.moveEdit(event.ctrlKey ? -Infinity : -1);
+  }
+  else if (event.keyCode == 39) {
+    if (event.shiftKey) level1.moveHighlight(event.ctrlKey ? Infinity : 1)
+    else level1.moveEdit(event.ctrlKey ? Infinity : 1);
+  }
 });
 
 setInterval(() => {
