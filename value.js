@@ -1,25 +1,26 @@
 import types from "./dataTypes.js";
 import commands from "./commands.js";
 
-const VARIABLE = /\d|[^a-z0-9+\-*=()/]/; // not (a-z, 0-9)
+const VARIABLE = /^\d|[^a-z0-9+\-*=()/]/; // not (a-z, 0-9)
 const ALGEBREIC = /[^a-z0-9+\-*=()/]/ // not (a-z, 0-9, operators, parentheses)
 
 export function buildVal(chars) {
   const stringVal = chars.join("");
 
-  if (!isNaN(parseFloat(stringVal))) return new NumberValue(parseFloat(stringVal)); // value is a number
+  if (stringVal.length != 0 && !isNaN(stringVal)) return new NumberValue(parseFloat(stringVal)); // value is a number
   // else if (stringVal in commands) return new CommandValue(stringVal); // value is a command
   else if (stringVal[0] == "\"") return new StringValue(stringVal) // value is a string
   else if (stringVal[0] == "\'") { // (global/local) variable, or algebreic object
     const value = stringVal.substring(1,stringVal.length-1); // remove 's
-    if (!VARIABLE.test(value)) { // alphanumeric
+    if (value.length != 0 && !isNaN(value)) return new NumberValue(parseFloat(value)); // if it is just a number within 's, just create a number
+    else if (!VARIABLE.test(value)) { // alphanumeric
       return new GlobalVariableValue(stringVal); // TODO: also need to test for local variable, eventually
     }
-    if (!ALGEBREIC.test(value)) {
-      if (!isNaN(parseFloat(value))) return new NumberValue(parseFloat(value)); // if it is just a number within 's, just create a number
-      else return new AlgebreicVariable(stringVal);
-    } // algebreic
+    if (!ALGEBREIC.test(value)) return new AlgebreicVariable(stringVal); // algebreic
     throw new Error(`Invalid value within expression ${stringVal}`)
+  }
+  else if (stringVal in commands) {
+    return new CommandValue(stringVal);
   }
   return new Value(chars);
 }
@@ -63,7 +64,7 @@ export class NumberValue extends Value {
 
   add(other) {
     if (other.type == types.number) return new NumberValue(other.value + this.value);
-    if (other.type == types.string) return other.add(this);
+    if (other.type == types.string) return new StringValue(other.value + this.chars.join(""));
     super.add();
   }
   sub(other) {
@@ -125,4 +126,15 @@ export class AlgebreicVariable extends Value {
     const chars = stringVal.split("");
     super(chars, value, types.algebreic);
   }
+}
+
+export class CommandValue extends Value {
+  constructor(stringVal) {
+    super(stringVal.toString(), stringVal, types.command);
+  }
+  
+  // execute(level) {
+  //   if (!level.isSolid)  level.solidify();
+  //   commands[this.value].call(level);
+  // }
 }

@@ -8,6 +8,7 @@ body {
   height: 50px;
   display: inline-block;
   background-color: #469946;
+  margin-right: 4px;
 }
 
 .boxes.active {
@@ -16,6 +17,10 @@ body {
 
 .boxes:hover {
   opacity: 0.4;
+}
+
+.bottoms {
+  background-color: #799f79;
 }
 
 @font-face {
@@ -46,4 +51,9 @@ body {
 
   font-family: SourceCodePro;
   font-size: 21px;
+}
+
+#queueCt {
+  color: yellow;
+  font-family: SourceCodePro;
 }

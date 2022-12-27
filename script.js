@@ -109,6 +109,9 @@ class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
   liquify() {
     this.stackUp(); // get rid of whatever is on the current level, so it doesn't interfere
     this.isSolid = false;
+    this.column = 0;
+    this.column2 = -2;
+    this.windowLeft = 0;
   }
 
   execute(commandVal) {
@@ -188,7 +191,13 @@ class Level extends ILevel {
   renderSolid() {
     let toRenderDepth = this.depth.toString().split("").concat(":");
     let toRender = this.value.chars;
+
+    /// DEBUG
+    toRender = toRender.concat(":", this.value.type.toString().split(""))
+    /// END DEBUG
+
     let spacing = 22 - toRender.length;
+
 
     if (toRender.length > 21 - toRenderDepth.length) {
       toRender = toRender.slice(0,20 - toRenderDepth.length).concat("...");
@@ -212,17 +221,17 @@ class Level extends ILevel {
     let invertLeft = Math.min(this.column2,this.column);
     let invertRight = Math.max(this.column2,this.column);
 
-    if (this.windowLeft == -1 && this.column2 == -2) this.windowLeft = 0;
-
-    let windowLeft = Math.max(this.windowLeft,0);
-    let windowRight = this.windowLeft+21;
     
+    if (this.windowLeft == -1 && this.column2 != -1 && this.column != -1) this.windowLeft = 0;
+    
+    let windowLeft = this.windowLeft
+    let windowRight = windowLeft+21;
+
     if (this.cursor > 0) {
       if (this.column2 != -2) {
         // add in highlight cursors
         toRender.splice(invertRight, 1, "<=");
-        if (invertLeft == -1) toRender.splice(0, 0, "=>");
-        else toRender.splice(invertLeft, 1, "=>");
+        if (invertLeft != -1) toRender.splice(invertLeft, 1, "=>");
       }
       else toRender.splice(this.column, 1, "<="); // add in cursor
     }
@@ -232,8 +241,8 @@ class Level extends ILevel {
     if (this.value.chars.length+1 >= 22) { // cut off what cannot be shown on the screen, and add ellipsis to the left to indicate the cut
       this.clearLine(); // all numbers will be shifted, so line must be cleared before it can be redrawn
       if (this.value.chars.length+1 > 22) { // only want ellipsis if all cannot be drawn
-        const leftOverflow = this.windowLeft > 0 && !(invertLeft == this.windowLeft || invertRight == this.windowLeft);
-        const rightOverflow = windowRight+1 < this.value.chars.length && !(invertLeft == windowRight || invertRight == windowRight); 
+        const leftOverflow = this.windowLeft > 0 && ((invertLeft != this.windowLeft && invertRight != this.windowLeft) || this.cursor <= 0);
+        const rightOverflow = windowRight+1 < this.value.chars.length && ((invertLeft != windowRight && invertRight != windowRight) || this.cursor <= 0); 
 
         if (leftOverflow && rightOverflow) toRender = ["..."].concat(toRender.slice(windowLeft+1, windowRight), "...");
         else if (rightOverflow) toRender = toRender.slice(windowLeft,windowRight).concat("...");
@@ -242,7 +251,7 @@ class Level extends ILevel {
       }
       drawAll = true;
     }
-    
+
     if (invertLeft != -2) this.ctx.rect((invertLeft-this.windowLeft)*6+5,0, 1,10); // fill left slice of character
     for (let i = drawAll ? 0 : 0; i < toRender.length; i++) {
       const char = characters[toRender[i]];
@@ -269,6 +278,8 @@ class Level extends ILevel {
     // this.ctx.fill();
   }
   runCursor(step=10) {
+    if (this.isSolid) return;
+
     this.cursor -= step;
 
     let updateCursor = false;
@@ -330,19 +341,23 @@ class Level extends ILevel {
     
     if (this.column2 > this.column) this.column2 -= deleteCount;
 
-    this.moveEdit(0); // remove highlight
+    this.moveEdit(-1); // remove highlight
     return true;
   }
   
-  stackUp(newValue=new Value([])) {
+  stackUp(newValue=new Value([]), render=true) {
     super.stackUp(newValue);
-    this.clearLine();
-    this.render();
+    if (render) {
+      this.clearLine();
+      this.render();
+    }
   }
-  stackDown() {
+  stackDown(render=true) {
     const val = super.stackDown();
-    this.clearLine();
-    this.render();
+    if (render) {
+      this.clearLine();
+      this.render();
+    }
     return val;
   }
   
@@ -366,7 +381,6 @@ class Level extends ILevel {
     // standard operation
     if (this.column2 == -2) this.column = Math.min(Math.max(this.column+step, 0), this.value.chars.length); // constrain column to valid values
     // exiting highlight state, and move to column2 if [step] is in that direction
-
     else if (this.column2 < this.column && step < 0) this.column = this.column2 + 1;
     else if (this.column2 > this.column) {
       if (step > 0) this.column = this.column2;
@@ -389,17 +403,24 @@ class Level extends ILevel {
         this.column2 = this.column + 1;
       }
     }
-    
     this.cursor = 50;
     this.column2 = Math.min(Math.max(this.column2+step, -1), this.value.chars.length); // constrain column2 to valid values
-    this.windowLeft = Math.min(Math.max(this.windowLeft, this.column2-21), this.column2); // only move [windowLeft] if [column2] goes past the left/right bounds
-
-    // if (this.windowLeft < 0 && this.column2 >= 0) this.windowLeft = this.column2; // bring [windowLeft] out of negative
+    this.windowLeft = Math.max(Math.min(this.windowLeft, this.column2), this.column2-21, 0); // only move [windowLeft] if [column2] goes past the left/right bounds
     
-    // no need to render [column2]
-    if (this.column2 == this.column) this.column2 = -2;
+    if (Math.abs(this.column2 - this.column) == 1) this.moveEdit(1);
+    else this.render();
+  }
 
-    this.render();
+  copy() {
+    if (this.column2 == -2) return "";
+    const leftBound = Math.min(this.column2, this.column)+1;
+    const rightBound = Math.max(this.column2, this.column);
+    return this.value.chars.slice(leftBound, rightBound).join("");
+  }
+  cut() {
+    const text = this.copy();
+    this.removeHighlighted();
+    return text;
   }
 }
 
@@ -445,6 +466,22 @@ $("body").keydown((event) => {
   else if (event.keyCode == 39) {
     if (event.shiftKey) level1.moveHighlight(event.ctrlKey ? Infinity : 1)
     else level1.moveEdit(event.ctrlKey ? Infinity : 1);
+  }
+
+  else if (event.ctrlKey) {
+    if (event.keyCode == 65) { // ctrl-a
+      event.preventDefault();
+      level1.moveEdit(-Infinity);
+      level1.moveHighlight(Infinity);
+    }
+    else if (event.keyCode == 67) { // ctrl-c
+      event.preventDefault();
+      navigator.clipboard.writeText(level1.copy())
+    }
+    else if (event.keyCode == 88) { // ctrl-x
+      event.preventDefault();
+      navigator.clipboard.writeText(level1.cut());
+    }
   }
 });
 
