@@ -4,8 +4,9 @@ body {
 }
 
 .levels {
-  width: 660px;
-  margin: auto;
+  text-align: center;
+}
 
+.level-screens {
   background-color: #124d16;
 }

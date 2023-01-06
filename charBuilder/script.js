@@ -169,7 +169,10 @@ window.addEventListener("keydown", (e) => {
       cleanOutput();
     });
   }
-  if (e.key == " " && queueI < queue.length) ittQueue();
+  if (e.key == "q" && queueI < queue.length) {
+    e.preventDefault();
+    ittQueue();
+  }
 });
 
 var queueI = 0;
@@ -179,4 +182,6 @@ function ittQueue() {
     value: JSON.stringify(queue[queueI++])
   });
   cleanOutput();
+
+  copyToClipboard(document.getElementById("inlineOutput"));
 }

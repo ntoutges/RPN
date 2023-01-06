@@ -1,5 +1,5 @@
 import types from "./dataTypes.js";
-import commands from "./commands.js";
+import { commands } from "./commands.js";
 
 const VARIABLE = /^\d|[^a-z0-9+\-*=()/]/; // not (a-z, 0-9)
 const ALGEBREIC = /[^a-z0-9+\-*=()/]/ // not (a-z, 0-9, operators, parentheses)
