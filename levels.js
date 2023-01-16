@@ -1,8 +1,9 @@
 import characters from "./graphics.js";
-import { commands } from "./commands.js";
-import types from "./dataTypes.js";
+import { commands } from "./commands/commands.js";
+import { types } from "./dataTypes.js";
 import pairs from "./pairs.js";
 import { buildVal, Value } from "./value.js"
+import { charsToString, charsFromString, separateLines } from "./utils.js";
 
 const CURSOR_FLASH_TIME = 700;
 const CURSOR_BLINK_TIME = 100;
@@ -26,17 +27,6 @@ export class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
     if (this.value.chars.length == 0) this.clearHole(); // eliminate this hole in the stack
     else if (!this.isSolid) this.solidify(); // don't push stack up; instead solifiy this stack level 
     else this.duplicate(); // value is solid, and there is a value to be copied
-  }
-
-  handleInput(char) {
-    if (char == "Enter") return this.enter();
-    else if (!this.isWithinPairs(this.cursor) && (char in commands)) {
-      try { this.execute(char); }
-      catch(err) {
-        console.log(err);
-      }
-    }
-    else this.addChar(char);
   }
 
   setChars(chars) {
@@ -88,7 +78,7 @@ export class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
   solidify() {
     let lines = [];
     
-    try { lines = this.separateLines(); }
+    try { lines = separateLines(this.value.chars); }
     catch (err) {
       console.log(err);
     }
@@ -102,10 +92,11 @@ export class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
       }
 
       this.isSolid = true;
-
       if (this.value.type == types.command) {
-        const commandVal = this.stackDown().value; // take command off stack
-        this.execute(commandVal);
+        const command = this.value;
+        this.stackDown();
+        command.execute(this);
+        continue;
       }
       
       if (i != lines.length-1) this.stackUp();
@@ -120,8 +111,9 @@ export class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
   }
 
   execute(commandVal) {
+    debugger;
     if (!this.isSolid) this.solidify();
-    commands[commandVal].call(this);
+    commands[commandVal](this);
   }
 
   isWithinPairs(index=this.value.chars.length) {
@@ -132,31 +124,6 @@ export class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
       else if (char == pairEnding) pairEnding = null; // detect character closing pair
     }
     return pairEnding != null;
-  }
-
-  separateLines() {
-    // if input should be put on multiple levels of the stack, separate
-    const lines = [];
-    let line = [];
-    let pairEnding = null; // stores the character that will close this pair
-    for (let char of this.value.chars) {
-      if (pairEnding == null && (char == " " || char == "," || char == "\n")) { // skip adding any seperator characters to line
-        if (line.length != 0) lines.push(line);
-        line = [];
-        continue;
-      }
-      line.push(char);
-      
-      if (pairEnding == null && char in pairs.start) pairEnding = pairs.start[char];
-      else if (char == pairEnding) {
-        pairEnding = null;
-        lines.push(line);
-        line = [];
-      }
-    }
-    if (pairEnding != null) line.push(pairEnding);
-    if (line.length != 0) lines.push(line);
-    return lines;
   }
 }
 
@@ -207,9 +174,9 @@ export class Level extends ILevel {
   renderSolid() {
     let toRenderDepth = this.depth.toString().split("").concat(":");
     let toRender = this.value.chars;
-
+    
     /// DEBUG
-    toRender = toRender.concat(":", this.value.type.toString().split(""))
+    // toRender = toRender.concat(":", this.value.type.toString().split(""))
     /// END DEBUG
 
     let spacing = this.charsShown - toRender.length;
@@ -364,7 +331,6 @@ export class Level extends ILevel {
     if (!super.popChar(this.cursor)) return;
     this.moveCursor(-1);
 
-    console.log(this.cursor - this.charsShown+2, this.windowLeft)
     if (this.cursor-this.charsShown+2 == this.windowLeft) this.windowLeft = Math.max(0, this.cursor-this.charsShown+1); // cursor is at far right, so keep it there
     else this.windowLeft = Math.min(this.cursor, this.windowLeft); // cursor is not at right, so move window normally
     this.clearLine();
@@ -417,12 +383,19 @@ export class Level extends ILevel {
   }
 
   moveCursor(step, render=true) {
+    if (step != 0 && this.highlight > -2) {
+      this.removeHighlight(step, render);
+      this.moveCursor(0);
+      return;
+    }
+
     if (!Number.isFinite(step)) {
       const finiteStep = Math.sign(step);
       let oldCursor = this.cursor;
       this.cursor += finiteStep;
       // this.reRenderChar(oldCursor + this.cursorType[2]);
       this.moveCursor(0, render);
+      if (this.cursor == 0) return;
 
       const spaceInvert = this.value.chars[this.cursor] == " ";
       while (oldCursor != this.cursor && this.cursor >= 0 && this.cursor < this.value.chars.length) {
@@ -432,12 +405,6 @@ export class Level extends ILevel {
       }
       // this.moveCursor(-finiteStep);
       if (step < 0) this.cursor++;
-      this.moveCursor(0);
-      return;
-    }
-
-    if (step != 0 && this.highlight > -2) {
-      this.removeHighlight(step, render);
       this.moveCursor(0);
       return;
     }
@@ -480,6 +447,7 @@ export class Level extends ILevel {
       const finiteStep = Math.sign(step);
       let oldHighlight = this.highlight;
       this.highlight += finiteStep;
+      if (this.highlight == -2) this.highlight = -1;
       // this.reRenderChar(oldHighlight - this.cursorType[2]);
 
       const spaceInvert = this.value.chars[this.highlight] == " ";
@@ -519,15 +487,10 @@ export class Level extends ILevel {
   removeHighlight(step=0, render=true) {
     const oldHighlight = this.highlight;
     this.highlight = -2;
-    // this.reRenderChar(oldHighlight);
-
+    
     if (step == 0) return;
 
-    // const oldCursor = this.cursor;
-    // debugger;
     this.cursor = (step > 0) ? Math.max(oldHighlight, this.cursor) : Math.min(oldHighlight, this.cursor) + 2;
-    // this.reRenderChar(oldCursor);
-    // this.reRenderChar(this.cursor);
 
     if (render) {
       this.clearLine();
@@ -592,60 +555,6 @@ export class Level extends ILevel {
     return this.value.chars.slice(min+1,max);
   }
 
-  charsToString(chars=this.value.chars) {
-    let str = "";
-    let workingChar = null;
-    let workingRepeats = 0;
-    for (let i = 0; i < chars.length+1; i++) {
-      const char = (i < chars.length) ? chars[i] : null;
-      if (char != workingChar) {
-        if (workingChar != null) {
-          const workingRepeatsHex = workingRepeats.toString(16);
-          const escapeSequence = "\x18#" + workingRepeatsHex + "\x18";
-          const escapedChar = (workingChar.length != 1) ? `\x18$${workingChar}\x18` : workingChar; // this 'character' is represented by multiple characters
-          
-          if (workingRepeats < escapeSequence.length+1) for (let i = 0; i < workingRepeats; i++) str += escapedChar;
-          else str += escapeSequence + escapedChar;
-        }
-
-        workingRepeats = 0;
-        workingChar = char;
-      }
-      
-      workingRepeats++;
-    }
-    return str;
-  }
-
-  charsFromString(string) {
-    const chars = [];
-    
-    let repeats = 1;
-    let workingChar = "";
-    
-    for (let i = 0; i < string.length; i++) {
-      if (string[i] == "\x18") {
-        const substring = string.substring(i+2);
-        const endI = substring.indexOf("\x18");
-        const data = substring.substring(0,endI);
-        switch(string[i+1]) {
-          case "#":
-            repeats = (endI == -1 || isNaN(parseInt(data, 16))) ? 1 : parseInt(data, 16);
-            break;
-          case "$":
-            workingChar = data;
-            break;
-        }  
-        i += 2 + endI;
-      }
-      else workingChar = string[i]
-      
-      if (workingChar.length != 0) {
-        for (let i = 0; i < repeats; i++) { chars.push(workingChar); }
-        repeats = 1;
-        workingChar = "";
-      }
-    }
-    return chars;
-  }
+  charsToString(chars=this.value.chars) { return charsToString(chars); }
+  charsFromString(string) { return charsFromString(string); }
 }
