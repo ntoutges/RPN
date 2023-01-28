@@ -26,3 +26,5 @@ export function paste(level1) {
     level1.addChars( level1.charsFromString(txt) );
   });
 }
+
+export function KEYWORD(level1) {} // keywords reserved for providing context, and themselves do nothing

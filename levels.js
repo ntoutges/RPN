@@ -84,19 +84,19 @@ export class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
     }
     if (lines.length == 0) { lines.push([]); } // ensure that the line will always be updated
     
+    this.isSolid = true;
     for (let i in lines) {
-      try { this.value = buildVal(lines[i]); }
+      try {
+        const value = buildVal(lines[i]);
+        if (value.type == types.command) {
+          this.stackDown();
+          value.execute(this);
+        }
+        else this.value = value;
+      }
       catch (err) {
         console.log(err);
         break;
-      }
-
-      this.isSolid = true;
-      if (this.value.type == types.command) {
-        const command = this.value;
-        this.stackDown();
-        command.execute(this);
-        continue;
       }
       
       if (i != lines.length-1) this.stackUp();
@@ -219,7 +219,6 @@ export class Level extends ILevel {
     if (this.cursorEN) {
       if (this.highlight != -2) {
         // add in highlight cursor
-        console.log(invertLeft)
         toRender.splice(invertRight, 1, "<=");
         if (invertLeft >= 0) toRender.splice(invertLeft, 1, "=>");
       }

@@ -17,7 +17,11 @@ const translations = {
   "^/": "div",
   "+^^": "pow",
   "^^": "pow",
-  "!-": "neg"
+  "!-": "neg",
+  "^,": "<<",
+  "^.": ">>",
+  "+^>": "->",
+  "+^<": "<-"
 };
 
 const hotkeys = {
@@ -26,7 +30,7 @@ const hotkeys = {
   "mul": () => { (new value.CommandValue("*")).execute(level1); },
   "div": () => { (new value.CommandValue("/")).execute(level1); },
   "pow": () => { (new value.CommandValue("^")).execute(level1); },
-  "neg": () => { new value.CommandValue("neg").execute(level1); }
+  "neg": () => { new value.CommandValue("NEG").execute(level1); }
 }
 
 window.addEventListener("keydown", e => {
@@ -47,7 +51,7 @@ window.addEventListener("keydown", e => {
     e.preventDefault();
     return;
   }
-
+  
   if (isPrintable) { level1.addChar(key); }
   else runCommand(translation);
 });

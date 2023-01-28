@@ -3,6 +3,8 @@ import * as ops from "./operations.js";
 import * as mth from "./math.js";
 import * as prg from "./program.js";
 import * as ess from "./essentials.js";
+import * as tst from "./test.js";
+import * as kwd from "./keywords.js";
 
 
 export const commandTranslations = {
@@ -35,9 +37,28 @@ export const commands = {
   
   "SWAP": prg.swapXY,
 
+  "DUP": prg.dupX,
+  "DUP2": prg.dupXY,
+
   "STO": prg.stoX,
   "RCL": prg.rclX,
-  "GET": prg.getXY
+  "GET": prg.getXY,
+  "PURGE": prg.purgeX,
+
+  "EVAL": prg.evalX,
+  "=": tst.equalsXY,
+  ">": tst.greaterXY,
+  "<": tst.lesserXY,
+
+  "THEN": prg.thenX,
+  "ELSE": prg.else_,
+  "FOR": prg.forXY,
+  "NEXT": prg.next_,
+  "STEP": prg.stepX
+}
+
+for (const keyword of kwd.keywords) {
+  commands[keyword] = ess.KEYWORD;
 }
 
 export const arrowCommands = {
