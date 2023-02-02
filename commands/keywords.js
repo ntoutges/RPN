@@ -26,7 +26,7 @@ export const blockOffsets = {
   "END": 0,
   "NEXT": 0,
   "STEP": 0,
-  "FOR": 1
+  "FOR": 2
 }
 
 for (let starter in blockStart) {

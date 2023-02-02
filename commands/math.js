@@ -16,3 +16,14 @@ export function factorialX(level1) {
   for (let i = 2n; i <= integer; i++) { total *= i; }
   level1.stackUp(new values.NumberValue(total.toString()));
 }
+
+// export function equalsXY(level1) { // Y X =
+//   const {X,Y} = utils.getXY(level1);
+//   if (!utils.ofType(X, types.algebreic,types.number,types.globalName)) throw new Error("Invalid type");
+//   if (!utils.ofType(Y, types.algebreic,types.number,types.globalName)) throw new Error("Invalid type");
+//   level1.stackUp(
+//     new values.AlgebreicVariable(
+//       Y.chars.concat("=", X.chars)
+//     )
+//   )
+// }

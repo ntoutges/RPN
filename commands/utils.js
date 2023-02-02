@@ -38,6 +38,10 @@ export function orderlessType(X,Y, type1, type2) {
   return (X.type == type1 && Y.type == type2) || (X.type == type2 && Y.type == type1);
 }
 
+export function ofType(X, ...types) {
+  return types.includes(X.type);
+}
+
 export function runCommand(level1, commandVal) {
   if (!Array.isArray(commandVal)) commandVal = commandVal.split("");
   (new values.CommandValue(commandVal)).execute(level1);

@@ -65,6 +65,11 @@ export function getXY(level1) {
   }
 }
 
+export function sizeX(level1) {
+  const X = utils.getX(level1);
+  level1.stackUp( new values.NumberValue(X.value.length.toString()) );
+}
+
 export function evalX(level1) {
   const X = utils.getX(level1);
   if (X.type != types.program) {
@@ -73,6 +78,7 @@ export function evalX(level1) {
   }
   const commands = X.getCommands();
   const blocks = X.getBlocks();
+
   let workingBlocksDir = 0;
   for (let i = 0; i < commands.length; i++) {
     const value = commands[i];
@@ -87,9 +93,12 @@ export function evalX(level1) {
 
     switch(value.type) {
       case types.command:
-        while (workingBlocksDir < blocks.length && blocks[workingBlocksDir].fI < i) { workingBlocksDir++; }
+        while (workingBlocksDir < blocks.length - 1 && blocks[workingBlocksDir].fI < i) { workingBlocksDir++; }
         const goto = value.execute(level1, blocks, workingBlocksDir, i);
-        if (goto != undefined) { i = goto; }
+        if (goto != undefined) {
+          if (goto-1 < i) workingBlocksDir = 0; // inefficient, to improve
+          i = goto-1;
+        } // account for i++ in loop
         break;
       case types.program:
         level1.stackUp(value);
@@ -118,11 +127,15 @@ export function dupXY(level1) {
   level1.stackUp(X);
 }
 
+export function dropX(level1) {
+  level1.stackDown();
+}
+
 export function thenX(level1, blocks=null, bI) {
   const X = utils.getX(level1);
   if (blocks == null) return;
   if (utils.isFalsy(X)) { // don't need to do anything if truthy (just let program keep running)
-    return blocks[bI].tI - 1 + blockOffsets[blocks[0].tT]; // account for i++ term in EVAL loop
+    return blocks[bI].tI + blockOffsets[blocks[bI].tT];
   }
 }
 
@@ -145,7 +158,7 @@ export function forXY(level1, blocks=null, bI) {
 }
 
 export function next_(level1, blocks=null, bI, i) {
-  for (let j = bI-1; j >= 0; j--) {
+  for (let j = bI; j >= 0; j--) {
     if (blocks[j].tI == i) {
       const numToTest = Vars.getVariable(blocks[j].vars[0]).add(new values.NumberValue("1"));
       Vars.setVariable(blocks[j].vars[0], numToTest);
@@ -160,7 +173,7 @@ export function next_(level1, blocks=null, bI, i) {
 }
 
 export function stepX(level1, blocks=null, bI, i) {
-  for (let j = bI-1; j >= 0; j--) {
+  for (let j = bI; j >= 0; j--) {
     if (blocks[j].tI == i) {
       const X = utils.getX(level1);
       if (X.type != types.number) throw new Error("Invalid STEP type");

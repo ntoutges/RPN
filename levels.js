@@ -15,7 +15,7 @@ export class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
     this.next = nextLevel;
     this.isReal = false; // doesn't occupy screen space
     this.charsShown = charsShown;
-
+    
     this.isSolid = true;
   }
 
@@ -111,7 +111,6 @@ export class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
   }
 
   execute(commandVal) {
-    debugger;
     if (!this.isSolid) this.solidify();
     commands[commandVal](this);
   }
@@ -141,7 +140,7 @@ export class Level extends ILevel {
 
     super(nextLevel, charsShown);
     
-    this.cursorType = [ "<=", "=>", 0 ];
+    this.cursorType = [ "=<", "=>", 0 ];
 
     this.isReal = true; // occupies screen space
     this.cursor = 0;     // indicates the main cursor
@@ -219,10 +218,10 @@ export class Level extends ILevel {
     if (this.cursorEN) {
       if (this.highlight != -2) {
         // add in highlight cursor
-        toRender.splice(invertRight, 1, "<=");
+        toRender.splice(invertRight, 1, "=<");
         if (invertLeft >= 0) toRender.splice(invertLeft, 1, "=>");
       }
-      else toRender.splice(this.cursor, 1, "<="); // add in cursor
+      else toRender.splice(this.cursor, 1, "=<"); // add in cursor
     }
 
     let drawAll = false; // indicate whether or not to redraw line

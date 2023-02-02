@@ -7,7 +7,7 @@ import * as kwd from "./commands/keywords.js";
 
 const NUMBER = /^[+-]?((\d+)|(\d*\.\d+))(E[+-]?\d+)?$/;
 const VARIABLE = /^\D[A-Za-z\d]*$/; // not (a-z, 0-9)
-const ALGEBREIC = /^[A-Za-z\d+\-*/]+$/ // not (a-z, 0-9, operators, parentheses)
+const ALGEBREIC = /^[A-Za-z\d+\-*/=]+$/ // not (a-z, 0-9, operators, parentheses)
 
 export function buildVal(chars, variableConvert=true) {
   const stringVal = chars.join("");

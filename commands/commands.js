@@ -31,6 +31,7 @@ export const commands = {
   "^": ops.powXY,
   "%": mth.percentXY,
   "!": mth.factorialX,
+  // "=": mth.equalsXY,
 
   "NEG": ops.negX,
   "INV": ops.invX,
@@ -39,14 +40,18 @@ export const commands = {
 
   "DUP": prg.dupX,
   "DUP2": prg.dupXY,
+  "DROP": prg.dropX,
 
   "STO": prg.stoX,
   "RCL": prg.rclX,
-  "GET": prg.getXY,
   "PURGE": prg.purgeX,
+  
+  "GET": prg.getXY,
+  "SIZE": prg.sizeX,
 
   "EVAL": prg.evalX,
-  "=": tst.equalsXY,
+  "==": tst.equalsXY,
+  "!=": tst.notEqualsXY,
   ">": tst.greaterXY,
   "<": tst.lesserXY,
 

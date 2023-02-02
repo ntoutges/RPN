@@ -11,6 +11,15 @@ export function equalsXY(level1) {
   ) 
 }
 
+export function notEqualsXY(level1) {
+  const {X,Y} = utils.getXY(level1);
+  level1.stackUp(
+    new values.NumberValue(
+      (X.equals(Y)) ? "0" : "1"
+    )
+  )
+}
+
 export function greaterXY(level1) {
   utils.runCommand(level1, "-");
   const X = utils.getX(level1);
