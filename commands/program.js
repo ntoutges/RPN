@@ -4,6 +4,7 @@ import { types } from "../dataTypes.js";
 import * as values from "../value.js";
 import { blockOffsets } from "./keywords.js";
 import * as tst from "./test.js";
+import { setRenderable } from "../levels.js";
 
 export function swapXY(level1) {
   const {X,Y} = utils.getXY(level1);
@@ -71,6 +72,7 @@ export function sizeX(level1) {
 }
 
 export function evalX(level1) {
+  setRenderable(false);
   const X = utils.getX(level1);
   if (X.type != types.program) {
     level1.stackUp(X);
@@ -103,6 +105,7 @@ export function evalX(level1) {
       case types.program:
         level1.stackUp(value);
         utils.runCommand(level1, "EVAL");
+        setRenderable(false);
         break;
       case types.variableName:
         level1.stackUp( value.RCL() );
@@ -111,6 +114,7 @@ export function evalX(level1) {
         level1.stackUp(value);
     }
   }
+  setRenderable(true);
 }
 
 export function dupX(level1) {

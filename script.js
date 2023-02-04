@@ -1,6 +1,6 @@
 const $ = window.$;
 
-import { Level } from "./levels.js";
+import { Level, onRenderableChange } from "./levels.js";
 import "./inputs.js";
 
 const levelHeight = 40;
@@ -28,6 +28,10 @@ function generateLevels(count) {
 
   level1 = nextLevel; // 'nextLevel' will always be the last level generated, thus the lowest, thus the first
 }
+
+onRenderableChange((doRender) => {
+  if (doRender) level1.renderRecursive();
+})
 
 // update screen
 // setInterval(() => level1.render(), 100);

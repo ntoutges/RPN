@@ -78,3 +78,22 @@ export function invX(level1) { // reciprocal
   prg.swapXY(level1);
   divXY(level1);
 }
+
+export function modXY(level1) {
+  const {X,Y} = utils.getXY(level1);
+  if (utils.sameType(X,Y,types.number)) { // Y X MOD
+    const division = Y.div(X, DIVISION_DECIMALS)
+    const divisionStr = division.value[0].toString();
+    const integer = divisionStr.substring(0, divisionStr.length - division.value[1]) || "0";
+
+    level1.stackUp(
+      Y.sub( 
+        X.mul(
+          new values.NumberValue(
+            integer.split("")
+          )
+        )
+      )
+    );
+  }
+}

@@ -9,7 +9,6 @@ import * as kwd from "./keywords.js";
 
 export const commandTranslations = {
   "~+Backspace": "~Backspace",
-  "~^Backspace": "~Backspace",
   "~+^Backspace": "~Backspace"
 }
 
@@ -18,6 +17,10 @@ export const commands = {
   "~Enter": level1 => { level1.enter(); }, // push current line to stack
   "~Escape": ess.escape, // stop focus on this line
   "~Backspace": level1 => { level1.delete(); }, // remove current character or remove current level of stack
+  "~^Backspace": level1 => {
+    level1.moveHighlight(-Infinity);
+    level1.delete();
+  },
 
   "~^a": ess.selectAll,
   "~^c": ess.copy,
@@ -29,6 +32,7 @@ export const commands = {
   "*": ops.mulXY,
   "/": ops.divXY,
   "^": ops.powXY,
+  "MOD": ops.modXY,
   "%": mth.percentXY,
   "!": mth.factorialX,
   // "=": mth.equalsXY,

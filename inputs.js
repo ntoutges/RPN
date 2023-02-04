@@ -52,6 +52,7 @@ window.addEventListener("keydown", e => {
     return;
   }
   
+  
   if (isPrintable) { level1.addChar(key); }
   else runCommand(translation);
 });

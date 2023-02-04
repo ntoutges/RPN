@@ -9,6 +9,25 @@ const CURSOR_FLASH_TIME = 700;
 const CURSOR_BLINK_TIME = 100;
 const CHARACTER_ASPECT_RATIO = 10 / 6 // y/x
 
+var doRender = true; // all Levels will share this
+
+const useSILevel = true;
+
+const separators = " \n+-*/,";
+const SEPARATORS = {};
+for (const char of separators) { SEPARATORS[char] = true; }
+
+const functs = [];
+export function onRenderableChange(funct) { functs.push(funct); }
+
+export function setRenderable(value=true) {
+  const oldValue = doRender;
+  doRender = value;
+  if (value != oldValue) {
+    functs.forEach(funct => funct(doRender));
+  }
+}
+
 export class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
   constructor(nextLevel, charsShown) {
     this.value = new Value([]); // what is shown to the user
@@ -53,7 +72,7 @@ export class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
   getChars() { return this.value.chars; }
   stackUp(newValue=new Value([])) {
     if (this.value.chars.length != 0) {
-      if (this.next == null) this.next = new ILevel(null); // expand stack if necessary
+      if (this.next == null) this.next = (useSILevel) ? new SILevel() : new ILevel(null); // expand stack if necessary
       this.next.stackUp(this.value);
     }
     this.value = newValue;
@@ -66,6 +85,120 @@ export class ILevel { // the InfiniLevel -- allows for unlimited stack expansion
       this.next.stackDown();
       if (this.next.getChars().length == 0 && !this.next.isReal) this.next = null; // delete stack above this point, as it is empty
     }
+    return oldValue;
+  }
+  clearHole() {
+    this.stackDown();
+    this.solidify();
+  }
+  duplicate() { this.stackUp( this.value ); } // works because values are immutable
+
+  // these are mainly so the sub-class has a notification as to when the level state changse
+  solidify() {
+    let lines = [];
+    
+    try { lines = separateLines(this.value.chars); }
+    catch (err) {
+      console.log(err);
+    }
+    if (lines.length == 0) { lines.push([]); } // ensure that the line will always be updated
+    
+    this.isSolid = true;
+    for (let i in lines) {
+      try {
+        const value = buildVal(lines[i]);
+        if (value.type == types.command) {
+          this.stackDown();
+          value.execute(this);
+        }
+        else this.value = value;
+      }
+      catch (err) {
+        console.log(err);
+        break;
+      }
+      
+      if (i != lines.length-1) this.stackUp();
+    }
+  }
+  liquify() {
+    this.stackUp(); // get rid of whatever is on the current level, so it doesn't interfere
+    this.isSolid = false;
+    this.cursor = 0;
+    this.highlight = -2;
+    this.windowLeft = 0;
+  }
+
+  execute(commandVal) {
+    if (!this.isSolid) this.solidify();
+    commands[commandVal](this);
+  }
+
+  isWithinPairs(index=this.value.chars.length) {
+    let pairEnding = null;
+    for (let i = 0; i < index; i++) { // encountered line start
+      const char = this.value.chars[i];
+      if (pairEnding == null && char in pairs.start) pairEnding = pairs.start[char]; // detect character opening up pair
+      else if (char == pairEnding) pairEnding = null; // detect character closing pair
+    }
+    return pairEnding != null;
+  }
+}
+
+export class SILevel { // the SuperInfiniLevel -- allows for unlimited stack expansion, beyond the limitations of the call stack
+  constructor(charsShown) {
+    this.isReal = false; // doesn't occupy screen space
+    this.charsShown = charsShown;
+
+    this.values = [new Value()];
+    // if (nextLevel instanceof SILevel) { this.values = this.values.concat(nextLevel.values); }
+    // else { this.values.push(nextLevel.value); }
+    
+    this.isSolid = true;
+  }
+
+  get value() { return (this.values.length > 0) ? this.values[this.values.length-1] : new Value(); } // what is shown to the user
+  set value(newVal) { this.values[0] = newVal; }
+
+  delete() {
+    if (this.isSolid) this.stackDown();
+    else this.popChar();
+  }
+  enter() {
+    if (this.value.chars.length == 0) this.clearHole(); // eliminate this hole in the stack
+    else if (!this.isSolid) this.solidify(); // don't push stack up; instead solifiy this stack level 
+    else this.duplicate(); // value is solid, and there is a value to be copied
+  }
+
+  setChars(chars) {
+    this.clear();
+    this.value.chars = chars;
+  }
+  addChar(char, index=this.value.chars.length) {
+    if (this.isSolid) this.liquify(); // don't try to edit a solidified line
+
+    if (char in characters) this.value.chars.splice(index,0, char);
+    else this.value.chars.splice(index,0, "unknown");
+  }
+  addChars(chars, index=this.value.chars.length) {
+    for (let i in chars) {
+      this.addChar(chars[i], index, i == chars.length-1);
+    }
+  }
+  popChar(index=this.value.chars.length) {
+    if (this.cursor == 0) return false; // unable to pop value
+    this.value.chars.splice(index-1,1);
+    return true; // able to pop value
+  }
+  clear() { this.value = new Value([]); }
+  getChars() { return this.value.chars; }
+  stackUp(newValue=new Value([])) {
+    if (this.value.chars.length == 0) this.value = newValue;
+    else this.values.push(newValue);
+  }
+  stackDown() {
+    const oldValue = this.value;
+    this.values.pop();
     return oldValue;
   }
   clearHole() {
@@ -160,7 +293,13 @@ export class Level extends ILevel {
     this.depth = depth;
   }
 
+  renderRecursive() {
+    this.render();
+    if (this.next && this.next instanceof Level) this.next.renderRecursive();
+  }
+  
   render() {
+    if (!doRender) return; // don't try to render
     this.ctx.beginPath();
 
     // different modes of rendering depending on input method
@@ -395,11 +534,11 @@ export class Level extends ILevel {
       this.moveCursor(0, render);
       if (this.cursor == 0) return;
 
-      const spaceInvert = this.value.chars[this.cursor] == " ";
+      const spaceInvert = this.value.chars[this.cursor] in SEPARATORS;
       while (oldCursor != this.cursor && this.cursor >= 0 && this.cursor < this.value.chars.length) {
         oldCursor = this.cursor;
         this.cursor += finiteStep;
-        if (spaceInvert ^ this.value.chars[this.cursor] == " ") { break; }
+        if (spaceInvert ^ this.value.chars[this.cursor] in SEPARATORS) { break; }
       }
       // this.moveCursor(-finiteStep);
       if (step < 0) this.cursor++;
@@ -448,11 +587,11 @@ export class Level extends ILevel {
       if (this.highlight == -2) this.highlight = -1;
       // this.reRenderChar(oldHighlight - this.cursorType[2]);
 
-      const spaceInvert = this.value.chars[this.highlight] == " ";
+      const spaceInvert = this.value.chars[this.highlight] in SEPARATORS;
       while (oldHighlight != this.highlight && this.highlight > -1 && this.highlight <= this.value.chars.length) {
         oldHighlight = this.highlight;
         this.highlight += finiteStep;
-        if (spaceInvert ^ this.value.chars[this.highlight] == " ") { break; }
+        if (spaceInvert ^ this.value.chars[this.highlight] in SEPARATORS) { break; }
       }
       this.moveHighlight(0, render);
       return;
